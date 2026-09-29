@@ -50,18 +50,28 @@ ChatGPT-Account-Id: <account_id>
 
 ## 安装
 
-### 从本地目录加载
+### 从 GitHub 安装（推荐）
 
-此仓库是 DSH bundle 插件项目。对于支持从本地 bundle 加载的 DSH 配置，可将仓库放入该 profile 的 `node_modules`，并确保插件目录名为 `dsh-chatgpt-login`。开发时也可以使用符号链接，让 DSH 加载工作区中的源码：
+在 DSH 的插件管理界面中选择**安装插件**，输入此 GitHub 仓库地址并安装：
+
+```text
+https://github.com/YakutsukuriYuu/dsh-chatgpt-login
+```
+
+安装完成后，在插件管理中启用 `dsh-chatgpt-login`。如果你使用的是图形化插件管理器，也可以在「安装新插件」中粘贴同一仓库地址。
+
+> 插件需要 DSH 支持从 GitHub 仓库安装 bundle。若安装器要求 Git 地址，也可使用 `https://github.com/YakutsukuriYuu/dsh-chatgpt-login.git`。
+
+### 本地开发安装
+
+开发或调试时，可将仓库链接到 DSH desktop profile 的 `node_modules`：
 
 ```bash
 # 在 DSH desktop profile 的 node_modules 目录下执行
 ln -s /绝对路径/dsh-chatgpt-login dsh-chatgpt-login
 ```
 
-然后在 DSH 插件管理中启用 `dsh-chatgpt-login`；如果当前版本/配置不支持本地 bundle 加载，请按 DSH 的 bundle 安装流程将项目加入 profile。源码修改后需重启 DSH 使 Host 代码重新加载，Client UI 修改后刷新页面。
-
-> 该项目的 `package.json` 声明了 bundle patch 和 Web client 注入目标。安装目录因 DSH profile 而异；`~/.dsh/profiles/desktop/node_modules/` 是 desktop profile 的常见位置。
+然后在 DSH 插件管理中启用 `dsh-chatgpt-login`。安装目录因 DSH profile 而异；`~/.dsh/profiles/desktop/node_modules/` 是 desktop profile 的常见位置。源码修改后需重启 DSH，使 Host 代码重新加载；Client UI 修改后刷新页面。
 
 ## 用法
 
