@@ -1,0 +1,4 @@
+# ChatGPT (Codex) 订阅登录：Host 半边 + 设置页 UI 半边
+- insert:
+    - id: chatgpt-login
+      name: dsh-chatgpt-login
