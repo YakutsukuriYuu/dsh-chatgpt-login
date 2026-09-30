@@ -50,17 +50,34 @@ ChatGPT-Account-Id: <account_id>
 
 ## 安装
 
-### 从 GitHub 安装（推荐）
+### 从 GitHub 获取并更新（不使用本地软链接）
 
-在 DSH 的插件管理界面中选择**安装插件**，输入此 GitHub 仓库地址并安装：
+此 bundle 是纯 JavaScript，无需构建脚本。按照 DSH bundle 的安装流程，在**目标 profile** 中通过 Git 安装：
 
-```text
-https://github.com/YakutsukuriYuu/dsh-chatgpt-login
+```bash
+dsh plugin --profile desktop add github:YakutsukuriYuu/dsh-chatgpt-login
 ```
 
-安装完成后，在插件管理中启用 `dsh-chatgpt-login`。如果你使用的是图形化插件管理器，也可以在「安装新插件」中粘贴同一仓库地址。
+将 `desktop` 替换为实际 profile 名。也可以安装某个固定提交，避免上游变动：
 
-> 插件需要 DSH 支持从 GitHub 仓库安装 bundle。若安装器要求 Git 地址，也可使用 `https://github.com/YakutsukuriYuu/dsh-chatgpt-login.git`。
+```bash
+dsh plugin --profile desktop add github:YakutsukuriYuu/dsh-chatgpt-login#<commit-sha>
+```
+
+从 Git 安装后，包在 profile 的依赖目录中，不会指向开发者电脑上的工作区。作者推送新提交后，可在 profile 目录执行：
+
+```bash
+pnpm update dsh-chatgpt-login
+```
+
+如果该 Git 依赖被锁定在旧提交、更新命令没有拉取到新版本，可删除后重新添加：
+
+```bash
+pnpm remove dsh-chatgpt-login
+pnpm add github:YakutsukuriYuu/dsh-chatgpt-login
+```
+
+更新完成后重启 DSH，让 Host 代码重新加载；Client UI 代码修改后再刷新页面。初次 Git 安装可能需要按 pnpm 提示，在 profile 的 `pnpm-workspace.yaml` 中允许该包的构建脚本；本插件当前没有 `prepare`/构建脚本，通常无需此步骤。首次安装从 GitHub 执行包代码前，请先审阅并信任仓库内容。
 
 ### 本地开发安装
 
