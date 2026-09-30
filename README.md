@@ -50,45 +50,43 @@ ChatGPT-Account-Id: <account_id>
 
 ## 安装
 
-### 从 GitHub 获取并更新（不使用本地软链接）
+### 安装（从 GitHub 获取）
 
-此 bundle 是纯 JavaScript，无需构建脚本。按照 DSH bundle 的安装流程，在**目标 profile** 中通过 Git 安装：
+建议使用 DSH CLI 安装，这样 DSH 会把 bundle 登记到 profile：
 
 ```bash
 dsh plugin --profile desktop add github:YakutsukuriYuu/dsh-chatgpt-login
 ```
 
-将 `desktop` 替换为实际 profile 名。也可以安装某个固定提交，避免上游变动：
+将 `desktop` 替换为你的 profile 名。也可以直接使用 pnpm，但要在该 profile 目录中执行：
 
 ```bash
-dsh plugin --profile desktop add github:YakutsukuriYuu/dsh-chatgpt-login#<commit-sha>
+cd ~/.dsh/profiles/desktop
+pnpm add github:YakutsukuriYuu/dsh-chatgpt-login
 ```
 
-从 Git 安装后，包在 profile 的依赖目录中，不会指向开发者电脑上的工作区。作者推送新提交后，可在 profile 目录执行：
+安装后确认 `dsh-chatgpt-login` 已加入该 profile 的 bundle 列表，然后重启 DSH。之后到 **设置 → ChatGPT 订阅** 完成登录。
+
+### 更新插件
+
+作者推送新版本后，推荐在同一 profile 重新安装 GitHub 版本：
 
 ```bash
-pnpm update dsh-chatgpt-login
+dsh plugin --profile desktop remove dsh-chatgpt-login
+dsh plugin --profile desktop add github:YakutsukuriYuu/dsh-chatgpt-login
 ```
 
-如果该 Git 依赖被锁定在旧提交、更新命令没有拉取到新版本，可删除后重新添加：
+如果你的环境没有 `dsh` 命令，也可在 profile 目录使用 pnpm：
 
 ```bash
+cd ~/.dsh/profiles/desktop
 pnpm remove dsh-chatgpt-login
 pnpm add github:YakutsukuriYuu/dsh-chatgpt-login
 ```
 
-更新完成后重启 DSH，让 Host 代码重新加载；Client UI 代码修改后再刷新页面。初次 Git 安装可能需要按 pnpm 提示，在 profile 的 `pnpm-workspace.yaml` 中允许该包的构建脚本；本插件当前没有 `prepare`/构建脚本，通常无需此步骤。首次安装从 GitHub 执行包代码前，请先审阅并信任仓库内容。
+这里采用“移除再添加”，确保重新获取 GitHub 上的最新提交，而不是继续使用 lockfile 固定的旧提交。完成后重启 DSH，使 Host 代码重新加载；如果更新涉及 Client UI，也刷新 DSH 页面。
 
-### 本地开发安装
-
-开发或调试时，可将仓库链接到 DSH desktop profile 的 `node_modules`：
-
-```bash
-# 在 DSH desktop profile 的 node_modules 目录下执行
-ln -s /绝对路径/dsh-chatgpt-login dsh-chatgpt-login
-```
-
-然后在 DSH 插件管理中启用 `dsh-chatgpt-login`。安装目录因 DSH profile 而异；`~/.dsh/profiles/desktop/node_modules/` 是 desktop profile 的常见位置。源码修改后需重启 DSH，使 Host 代码重新加载；Client UI 修改后刷新页面。
+> `desktop` 是 profile 名示例；若使用其他 profile，请替换为其实际目录。首次从 GitHub 安装前，请先审阅并信任仓库代码。该插件是纯 JavaScript，目前无需构建步骤。
 
 ## 用法
 
@@ -105,19 +103,16 @@ ln -s /绝对路径/dsh-chatgpt-login dsh-chatgpt-login
 - 模型页里已添加 `openai-codex` provider；缺了的话这一页登录本身能用，但没有模型可选。
 - `auth.openai.com` 与 `chatgpt.com` 网络可达（需要系统级代理/TUN，或在 `~/.dsh/.env` 里给 Host 配 `HTTPS_PROXY`）。
 
-## 实现要点
+## 项目开发
 
-- **只依赖相对路径**：外部安装的 bundle 解析不到 `@deepseek-ai/*` 裸包名，所以 Host 半边只 import 同目录的 `quota.js`，服务用 `ctx.provide` 注册。
-- **手写 Remote 标记**：没有构建步骤就用不了 Typert 装饰器，于是在 `ChatGptLogin.prototype` 上直接写 `@deepseek-ai/dsh-typert-protocol/remote-methods` 描述符；Client 半边用 `ctx.remote.$mount({ package, descriptors })` 挂上对应命名空间，之后调 `ctx.remote.chatgptLogin.*`。
-- **额度胶囊挂在 `conversation.composer.dock`**：这是会话内的列表槽，用一个自己的 id（`chatgpt-quota`）注册就会与自带条目并排，不会替换掉 tok/s 那一格。
-- **改动 Host/Client 代码后需要重启 DSH**：禁用再启用插件不会重新 import 模块（同一 specifier 命中 ESM 缓存）。
+本仓库面向用户安装和使用；开发者可在本地克隆仓库、修改源码并提交 Pull Request。发布更新后，用户按上方“更新插件”步骤重新从 GitHub 安装。
 
-## 文件
+## 项目文件
 
 | 文件 | 作用 |
 |---|---|
-| `index.js` | Host 半边：`status` / `login` / `cancel` / `answer` / `logout` / `quota` |
-| `quota.js` | Host 半边：官方用量接口与令牌刷新（`fetchCodexQuota` / `refreshCodexToken`） |
-| `client.js` | Client 半边：`settings.section` 页面 + `settings.models.provider-card` 内联入口 + `conversation.composer.dock` 额度胶囊 |
-| `cordis.patch.yml` | 插入 `chatgpt-login` 行 |
-| `package.json` | bundle + `dsh.client` 声明 |
+| `index.js` | Host 服务：登录状态、OAuth 登录、退出和额度读取 |
+| `quota.js` | 查询额度接口并在需要时刷新令牌 |
+| `client.js` | 设置页、模型登录入口和会话额度显示 |
+| `cordis.patch.yml` | 声明插件 bundle |
+| `package.json` | 插件元数据与 DSH Client 注入配置 |
