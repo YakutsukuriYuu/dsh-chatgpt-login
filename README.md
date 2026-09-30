@@ -1,17 +1,36 @@
 # dsh-chatgpt-login
 
-**在 DeepSeek Harness（DSH）中使用 ChatGPT/Codex 订阅登录，并查看 5 小时与周用量。**
+这是一个 DeepSeek Harness（DSH）插件，让你用 ChatGPT/Codex 订阅登录并使用 `openai-codex` 模型对话，无需手动填写 API Key。插件也会在会话输入框下方显示 ChatGPT 订阅的 5 小时与周额度。
 
-在 **设置 → ChatGPT 订阅** 中完成 OAuth 登录后，可以选择 DSH 模型页提供的 `openai-codex` 模型对话，无需手动填写 API Key。插件还会在会话输入框下方显示订阅额度。
+## 安装
 
-> 本项目为社区插件，与 OpenAI 无关。用量读取使用 Codex 客户端调用的非公开接口；接口可能变更，插件不保证持续可用。请确认你有权使用对应的 ChatGPT/Codex 账号及订阅。
+本插件已在 **DSH 0.2.0** 版本下安装验证。**最推荐的方式**是在 DSH 的插件管理入口输入以下 GitHub 地址进行安装：
 
-## 它做什么
+```text
+github:YakutsukuriYuu/dsh-chatgpt-login
+```
 
-- **Host 半边**：把内置的 `openai-codex` 授权流（由 `@deepseek-ai/dsh-llm-pi-ai` 注册）包成一个可从设置页调用的服务，驱动 OAuth 登录、转发授权链接/设备码/提问、读写登录态；并用同一份凭据去问官方用量接口，读出两个额度窗口。
-- **Client 半边**：在设置里加一页「ChatGPT 订阅」，在 **设置 → 模型** 的 `openai-codex` provider 卡片上内联一个登录入口，并在输入框下方的状态区加一个额度胶囊。
+若使用命令行，可在目标 profile 中通过 GitHub 安装（将 `desktop` 换成你的 profile 名）：
 
-登录成功后，token 存在 Harness 凭据库里（记录键 `llm-pi-ai/openai-codex`），由 pi-ai 按订阅额度自动刷新，设置页会显示账号与过期时间。
+```bash
+dsh plugin --profile desktop add github:YakutsukuriYuu/dsh-chatgpt-login
+```
+
+更新插件时，在 DSH 插件入口重新安装该 GitHub 地址；也可在 profile 目录先移除旧版本再安装最新版：
+
+```bash
+cd ~/.dsh/profiles/desktop
+pnpm remove dsh-chatgpt-login
+pnpm add github:YakutsukuriYuu/dsh-chatgpt-login
+```
+
+安装或更新完成后重启 DSH；若更新涉及 Client UI，也刷新 DSH 页面。
+
+> `desktop` 为默认 profile 示例，其他 profile 请替换为对应目录。本插件在 DSH 0.2.0 下验证。项目为社区插件，与 OpenAI 无关；用量读取依赖 Codex 客户端使用的非公开接口，可能随服务端变化。请确保你有权使用对应账号及订阅。
+
+## 实现方式
+
+插件分为 Host 与 Client 两部分：Host 调用 DSH 内置的 `openai-codex` OAuth 能力处理登录、凭据和额度查询；Client 在设置页、模型 Provider 卡片及会话输入区注册对应 UI。登录凭据保存在 Harness 凭据库中，由 pi-ai 管理令牌刷新；插件不另存明文令牌。
 
 ## 额度显示
 
@@ -47,46 +66,6 @@ ChatGPT-Account-Id: <account_id>
 返回的 `rate_limit.primary_window` 是 5 小时滚动窗口、`secondary_window` 是 7 天窗口（`used_percent` 为已用百分比）。
 `access_token` 是短命 JWT，401/403 时用 `refresh_token` 换新令牌后重试；刷新走 `credentials.modifyRecord`，
 把「读旧凭据 → 换令牌 → 写回」放进同一把写锁，不会和 pi-ai 自己的刷新互相覆盖。
-
-## 安装
-
-### 安装（从 GitHub 获取）
-
-建议使用 DSH CLI 安装，这样 DSH 会把 bundle 登记到 profile：
-
-```bash
-dsh plugin --profile desktop add github:YakutsukuriYuu/dsh-chatgpt-login
-```
-
-将 `desktop` 替换为你的 profile 名。也可以直接使用 pnpm，但要在该 profile 目录中执行：
-
-```bash
-cd ~/.dsh/profiles/desktop
-pnpm add github:YakutsukuriYuu/dsh-chatgpt-login
-```
-
-安装后确认 `dsh-chatgpt-login` 已加入该 profile 的 bundle 列表，然后重启 DSH。之后到 **设置 → ChatGPT 订阅** 完成登录。
-
-### 更新插件
-
-作者推送新版本后，推荐在同一 profile 重新安装 GitHub 版本：
-
-```bash
-dsh plugin --profile desktop remove dsh-chatgpt-login
-dsh plugin --profile desktop add github:YakutsukuriYuu/dsh-chatgpt-login
-```
-
-如果你的环境没有 `dsh` 命令，也可在 profile 目录使用 pnpm：
-
-```bash
-cd ~/.dsh/profiles/desktop
-pnpm remove dsh-chatgpt-login
-pnpm add github:YakutsukuriYuu/dsh-chatgpt-login
-```
-
-这里采用“移除再添加”，确保重新获取 GitHub 上的最新提交，而不是继续使用 lockfile 固定的旧提交。完成后重启 DSH，使 Host 代码重新加载；如果更新涉及 Client UI，也刷新 DSH 页面。
-
-> `desktop` 是 profile 名示例；若使用其他 profile，请替换为其实际目录。首次从 GitHub 安装前，请先审阅并信任仓库代码。该插件是纯 JavaScript，目前无需构建步骤。
 
 ## 用法
 
