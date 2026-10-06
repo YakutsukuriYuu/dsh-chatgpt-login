@@ -63,7 +63,9 @@ Authorization: Bearer <access_token>
 ChatGPT-Account-Id: <account_id>
 ```
 
-返回的 `rate_limit.primary_window` 是 5 小时滚动窗口、`secondary_window` 是 7 天窗口（`used_percent` 为已用百分比）。
+返回的 `rate_limit` 含 5 小时滚动窗口与 7 天窗口（`used_percent` 为已用百分比）。窗口归属按
+`limit_window_seconds`（18000 / 604800）识别而不是按字段位置：Pro 套餐（`plan_type` 为 `pro` / `prolite`）
+会把 7 天窗口放进 `primary_window`、`secondary_window` 为 null（openai/codex#32707），此时界面只显示周窗口。
 `access_token` 是短命 JWT，401/403 时用 `refresh_token` 换新令牌后重试；刷新走 `credentials.modifyRecord`，
 把「读旧凭据 → 换令牌 → 写回」放进同一把写锁，不会和 pi-ai 自己的刷新互相覆盖。
 

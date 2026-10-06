@@ -407,6 +407,8 @@ window.__ModuleLoader__.load({
 		/** 套餐名：接口给的是 `plus` 这种小写。 */
 		function planLabel(planType) {
 			if (typeof planType !== 'string' || planType.length === 0) return null;
+			// Pro 账号的 plan_type 实际是 "prolite"（openai/codex#29243），显示成 Pro。
+			if (planType === 'prolite') return 'Pro';
 			return planType.charAt(0).toUpperCase() + planType.slice(1);
 		}
 
@@ -493,8 +495,8 @@ window.__ModuleLoader__.load({
 					t('quotaTitle'),
 					plan === null ? null : h('span', { key: 'plan', className: 'cgqPlan' }, `${t('quotaPlan')} ${plan}`)
 				]),
-				quota === null ? null : h(QuotaRow, { key: 'primary', label: t('quota5h'), window: quota.primary }),
-				quota === null ? null : h(QuotaRow, { key: 'secondary', label: t('quotaWeek'), window: quota.secondary }),
+				quota?.primary == null ? null : h(QuotaRow, { key: 'primary', label: t('quota5h'), window: quota.primary }),
+				quota?.secondary == null ? null : h(QuotaRow, { key: 'secondary', label: t('quotaWeek'), window: quota.secondary }),
 				props.error === null ? null : h('div', { key: 'error', className: 'cgqErr' }, props.error),
 				h('div', { key: 'foot', className: 'cgqFoot' }, [
 					h('span', { key: 'hint' }, updated === null ? t('quotaHint') : t('quotaUpdated', { time: updated })),
@@ -530,11 +532,14 @@ window.__ModuleLoader__.load({
 			if (quota === null) {
 				compact = h('span', { key: 'text', className: 'cgqStrong' }, loading ? t('quotaLoading') : t('quotaUnavailable'));
 			} else {
-				compact = h('span', { key: 'text', className: 'cgqStrong' }, [
-					`${t('quota5h')} ${primaryRemaining ?? 0}%`,
-					h('span', { key: 'sep', className: 'cgqSep' }, '·'),
-					`${t('quotaWeek')} ${secondaryRemaining ?? 0}%`
-				]);
+				// Pro 套餐只有周窗口（5 小时窗口为 null），只渲染接口实际给了的窗口。
+				const children = [];
+				if (quota.primary != null) children.push(`${t('quota5h')} ${primaryRemaining ?? 0}%`);
+				if (quota.secondary != null) {
+					if (children.length > 0) children.push(h('span', { key: 'sep', className: 'cgqSep' }, '·'));
+					children.push(`${t('quotaWeek')} ${secondaryRemaining ?? 0}%`);
+				}
+				compact = h('span', { key: 'text', className: 'cgqStrong' }, children);
 			}
 			return h('div', {
 				className: 'cgqRoot',
@@ -562,19 +567,21 @@ window.__ModuleLoader__.load({
 			]);
 		}
 
-		/** 设置页里的额度小结：登录后显示两行文字。 */
+		/** 设置页里的额度小结：登录后显示两行文字；接口没给的窗口（如 Pro 没有 5 小时窗口）不显示。 */
 		function QuotaSummary() {
 			const { status, quota, error } = useQuota();
 			if (status === null) return null;
 			if (status.signedIn !== true) return h('p', { style: styles.subtitle }, t('quotaSignInFirst'));
 			if (quota === null) return h('p', { style: styles.subtitle }, error ?? t('quotaLoading'));
+			const usage = [];
+			if (quota.primary != null) usage.push(`${t('quota5h')} ${t('quotaRemaining', { percent: remainingOf(quota.primary) ?? 0 })}`);
+			if (quota.secondary != null) usage.push(`${t('quotaWeek')} ${t('quotaRemaining', { percent: remainingOf(quota.secondary) ?? 0 })}`);
+			const resets = [];
+			if (quota.primary != null) resets.push(`${t('quota5h')} ${formatResetClock(quota.primary.resetAt) ?? '—'}`);
+			if (quota.secondary != null) resets.push(`${t('quotaWeek')} ${formatResetClock(quota.secondary.resetAt) ?? '—'}`);
 			return h('div', { style: { ...styles.row, flexDirection: 'column', alignItems: 'flex-start', gap: 4 } }, [
-				h('span', { key: 'primary', style: styles.subtitle }, `${t('quotaTitle')} · ${t('quota5h')} ${t('quotaRemaining', { percent: remainingOf(quota.primary) ?? 0 })} · ${t('quotaWeek')} ${t('quotaRemaining', { percent: remainingOf(quota.secondary) ?? 0 })}`),
-				h('span', { key: 'reset', style: { ...styles.subtitle, fontSize: 12 } }, [
-					`${t('quota5h')} ${formatResetClock(quota.primary?.resetAt) ?? '—'}`,
-					h('span', { key: 'sep', style: { opacity: 0.5 } }, '  |  '),
-					`${t('quotaWeek')} ${formatResetClock(quota.secondary?.resetAt) ?? '—'}`
-				])
+				h('span', { key: 'primary', style: styles.subtitle }, `${t('quotaTitle')} · ${usage.join(' · ')}`),
+				h('span', { key: 'reset', style: { ...styles.subtitle, fontSize: 12 } }, resets.join('  |  '))
 			]);
 		}
 

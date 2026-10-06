@@ -8,8 +8,10 @@
  *   Authorization: Bearer <access_token>
  *   ChatGPT-Account-Id: <account_id>
  *
- * 返回里的 `rate_limit.primary_window` 是 5 小时滚动窗口，`secondary_window`
- * 是 7 天窗口，两者都按“已用百分比”给出。access_token 是短命 JWT，401/403 时
+ * 返回里的 `rate_limit` 含 5 小时滚动窗口与 7 天窗口，两者都按“已用百分比”给出。
+ * 注意窗口归属要看 `limit_window_seconds` 而不是字段位置：Pro 套餐（plan_type 为
+ * `pro` / `prolite`）会把 7 天窗口放进 `primary_window`，而 `secondary_window`
+ * 直接是 null（openai/codex#32707）。access_token 是短命 JWT，401/403 时
  * 用 refresh_token 换一次新的再重试。
  *
  * 这里不读也不写凭据库：凭据对象由调用方传入，刷新结果作为新对象返回，
@@ -28,19 +30,29 @@ const CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann';
 const JWT_CLAIM_PATH = 'https://api.openai.com/auth';
 /** 单次查询的超时，避免界面卡在一个不响应的端点上。 */
 const REQUEST_TIMEOUT_MS = 15_000;
+/** 5 小时窗口的 `limit_window_seconds`。 */
+const PRIMARY_WINDOW_SECONDS = 18_000;
+/** 7 天窗口的 `limit_window_seconds`。 */
+const SECONDARY_WINDOW_SECONDS = 604_800;
 
 /**
  * 把一个用量窗口读成纯数据。
  * @param value - `primary_window` / `secondary_window`。
  * @param label - 出错信息里用的中文标签。
- * @returns 已用百分比、重置时间戳（毫秒）与窗口长度。
+ * @returns 已用百分比、重置时间戳（毫秒）与窗口长度；接口没给这个窗口时返回 null。
  */
 function readWindow(value, label) {
-	if (value === null || typeof value !== 'object') throw new Error(`用量接口没有返回${label}窗口。`);
+	if (value === null || value === undefined) return null;
+	if (typeof value !== 'object') throw new Error(`用量接口返回的${label}窗口格式不对。`);
 	const used = Number(value.used_percent);
-	const resetAt = Number(value.reset_at);
 	if (!Number.isFinite(used)) throw new Error(`用量接口的${label}窗口缺少 used_percent。`);
-	if (!Number.isFinite(resetAt)) throw new Error(`用量接口的${label}窗口缺少 reset_at。`);
+	let resetAt = Number(value.reset_at);
+	if (!Number.isFinite(resetAt)) {
+		// 部分响应只给 reset_after_seconds（相对当前时刻的秒数）。
+		const after = Number(value.reset_after_seconds);
+		if (!Number.isFinite(after)) throw new Error(`用量接口的${label}窗口缺少 reset_at。`);
+		resetAt = Date.now() / 1000 + after;
+	}
 	return {
 		usedPercent: Math.min(100, Math.max(0, Math.round(used))),
 		resetAt: Math.round(resetAt * 1000),
@@ -50,8 +62,13 @@ function readWindow(value, label) {
 
 /**
  * 把用量接口的响应体读成界面要的数据。
+ *
+ * 窗口归属按 `limit_window_seconds` 判断而不是按字段位置：Pro 套餐的响应会把
+ * 7 天窗口放进 `primary_window`、`secondary_window` 为 null；按字段位置读会把
+ * 周额度错标成 5 小时，并因 `secondary_window` 缺失让整个查询失败。
+ *
  * @param body - 解析后的 JSON。
- * @returns 5 小时窗口、周窗口、套餐名与抓取时间。
+ * @returns 套餐名与 5 小时/周窗口；某个窗口接口没给时为 null。
  */
 export function quotaFromBody(body) {
 	if (body === null || typeof body !== 'object') throw new Error('用量接口没有返回 JSON 对象。');
@@ -59,10 +76,27 @@ export function quotaFromBody(body) {
 	if (rateLimit === null || typeof rateLimit !== 'object') {
 		throw new Error('这个账号没有返回额度信息（可能不是订阅账号）。');
 	}
+	const slots = { primary: null, secondary: null };
+	const candidates = [
+		['primary', readWindow(rateLimit.primary_window, '5 小时')],
+		['secondary', readWindow(rateLimit.secondary_window, '周')]
+	];
+	for (const [wire, window] of candidates) {
+		if (window === null) continue;
+		const slot = window.windowSeconds === PRIMARY_WINDOW_SECONDS
+			? 'primary'
+			: window.windowSeconds === SECONDARY_WINDOW_SECONDS
+				? 'secondary'
+				: wire;
+		if (slots[slot] === null) slots[slot] = window;
+	}
+	if (slots.primary === null && slots.secondary === null) {
+		throw new Error('用量接口没有返回任何额度窗口。');
+	}
 	return {
 		planType: typeof body.plan_type === 'string' ? body.plan_type : null,
-		primary: readWindow(rateLimit.primary_window, '5 小时'),
-		secondary: readWindow(rateLimit.secondary_window, '周')
+		primary: slots.primary,
+		secondary: slots.secondary
 	};
 }
 
